@@ -23,9 +23,9 @@ int main(int argc, const char * argv[]) {
 //    testing::seed_tri_test();
 //    testing::mesher_test();n
     //demo_read();
-    
-    string name = "Armadillo.xyz";
-    double radius = 3;
+    string name = "../Point2Mesh/dragon.xyz";
+    //string name = "Armadillo.xyz";
+    double radius = 0.00001;
     MeshConvert m = MeshConvert(name, radius);
     m.construct();
 //    m.sharp();
