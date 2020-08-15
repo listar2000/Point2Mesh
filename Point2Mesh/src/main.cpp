@@ -23,15 +23,22 @@ int main(int argc, const char * argv[]) {
 //    testing::seed_tri_test();
 //    testing::mesher_test();n
     //demo_read();
+    Timer t;
+    t.reset();
     string name = "../Point2Mesh/dragon.xyz";
-    //string name = "Armadillo.xyz";
-    double radius = 0.00001;
+    double radius = 0.002;
     MeshConvert m = MeshConvert(name, radius);
+    t.stop();
     m.construct();
 //    m.sharp();
+    t.stop();
+    m.postProcess();
+    t.stop();
     std::cout<< m.count_i;
     std::cout<< "\n";
     std::cout<< m.count_j;
     std::cout<< "\n";
     m.write_to_file();
+    list<double> timing = t.get_all_stops();
+    m.data_output(name, timing);
 }

@@ -1,5 +1,6 @@
 #include "meshconvert.h"
 #include "utils.h"
+//#include "clock.h"
 #include <iostream>
 #include <fstream>
 
@@ -416,9 +417,9 @@ namespace CGL {
     }
 
     void MeshConvert::write_to_file() {
-        string out_p = "point2.txt";
-        string out_n = "normal2.txt";
-        string out_t = "triangle2.txt";
+        string out_p = "point.txt";
+        string out_n = "normal.txt";
+        string out_t = "triangle.txt";
         ofstream out_1;
         out_1.open(out_p);
         if (!out_1) {
@@ -460,5 +461,70 @@ namespace CGL {
             out_3 << "\n";
         }
         out_3.close();
+    }
+    
+    void MeshConvert::data_output(string name,list<double> timing) {
+        string out_p = "log.txt";
+        ofstream out_1;
+        out_1.open(out_p);
+        if (!out_1) {
+            std::cout<<"error output";
+            std::cout<< "\n";
+        }
+        out_1<< name;
+        out_1<< "\n";
+        
+        out_1<< "radius : ";
+        out_1<< m_radius;
+        out_1<< "\n";
+        
+        out_1<<"max depth : ";
+        out_1<< m_tree->max_depth;
+        out_1<< "\n";
+        
+        out_1<<"vertex number : ";
+        out_1<< m_vertices.size();
+        out_1<< "\n";
+        
+        out_1<<"triangles number : ";
+        out_1<< m_triangles.size();
+        out_1<< "\n";
+        
+        out_1<<"front edge number : ";
+        out_1<< m_front_edges.size();
+        out_1<< "\n";
+        
+        out_1<<"border edge number : ";
+        out_1<< m_border_edges.size();
+        out_1<< "\n";
+        
+        out_1<<"triangles created by findseed : ";
+        out_1<< count_i;
+        out_1<< "\n";
+        
+        out_1<<"triangles created by expand : ";
+        out_1<< count_j;
+        out_1<< "\n";
+        
+        auto it = timing.begin();
+        out_1<<"initilization time  : ";
+        out_1<< *it;
+        out_1<< " ms";
+        out_1<< "\n";
+        
+        it ++;
+        out_1<<"construction time  : ";
+        out_1<< *it;
+        out_1<< " ms";
+        out_1<< "\n";
+        
+        it ++;
+        out_1<<"postprocess time  : ";
+        out_1<< *it;
+        out_1<< " ms";
+        out_1<< "\n";
+            
+        out_1.close();
+        
     }
 }
