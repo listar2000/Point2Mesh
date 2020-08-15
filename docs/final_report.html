@@ -1,0 +1,521 @@
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS 184: Final Project</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito">
+    </head>
+<body>
+    <nav class="navbar navbar-splash navbar-expand-md" style="background-color: rgb(45, 61, 138);">
+        <div class="container">
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <!-- Left Side Of Navbar -->
+                <ul class="navbar-nav mr-auto">
+                    <li>
+                        <p class="course-title">CS 184: Computer Graphics</p>
+                    </li>
+                </ul>
+                <!-- Right Side Of Navbar -->
+                <ul class="navbar-nav ml-auto">
+                    <!-- Authentication Links -->
+                    <li class="nav-item dropdown show">
+                        <a class="item-text dropdown-toggle" href="#" id="linkDrop" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                            Links
+                        </a>
+                        <div class="dropdown-menu show" aria-labelledby="linkDrop">
+                            <a class="dropdown-item" href="/proposal.html">Proposal</a>
+                            <a class="dropdown-item" href="/milestone.html">Milestone</a>
+                            <a class="dropdown-item" href="https://www.youtube.com/watch?v=ACOocYihLiw&t=1s">Final Video</a>
+                        </div>
+                    </li>
+                    <li class="nav-item">
+                        <a id="about" class="item-text" href="javascript:void(0)" "="">Final Project</a>
+                    </li>
+                </ul>
+            </div> 
+        </div>
+    </nav>
+    <div class="course-container">
+        <div class="row">
+            <div class="col-md-12">
+                <h1>
+                    <strong>Final Project Milestone Report</strong>
+                    : Point-cloud to Mesh</h1>
+                <h3>Name: &nbsp; Star Li | SID: 3033789672 &nbsp; Han Cui | SID: 3033631995</h3>
+            </div>
+        </div>
+        <hr>
+        <div>
+            <h2>Abstract</h2>
+
+            <p>
+                Surface reconstruction is the task to recover the surface mesh using a list of 3D points and their normals, which are usually scanned from the original objects and scenes in <kbd>.ply</kbd> format. 
+                It has been a heated topic in computer graphics over the years and what our focus is to implement one of the most famous algorithms -- the <code>Ball-Pivoting Algorithm</code> -- to enable efficient and 
+                accurate reconstruction. We started from building optimized, basic geometry structure and acceleration structure <kbd>octree</kbd>, and successfully implemented the core BPA algorithm using an iterative 
+                approach. Finally, we completed our pipeline by performing pre-processing and post-processing with python, so that we are able to read in <kbd>.ply</kbd> files from the Stanford Scan Repo and visualize 
+                the final results with <code>Blender</code>.
+            </p>
+
+            <br>
+            <div class="row">
+                <div class="col-md-6" style="text-align: center;">
+                    <img src = "images/blender/dragon_45deg.png" height="400px">
+                    <figcaption>reconstructed result: dragon</figcaption> 
+                </div>
+                <div class="col-md-6" style="text-align: center;">
+                    <img src = "images/blender/monster_front.png" height="400px">
+                    <figcaption>reconstructed result: monster</figcaption> 
+                </div>
+            </div>
+            <br>
+            <hr>
+            <h2>Technical approach: Octree</h2>
+            <p>
+                In the BPA algorithm, there are lots of spatial queries that requires checking all the vertices (points) in the 3D space. For example, whenver we want to 
+                construct a new triangle mesh, we need to ensure the circumsphere of this triangle doesn't contain any point other than the triangle vertices. Without the help 
+                of an acceleration structure, this operation is so inefficient that our personal computer can barely perform any reconstruction. In this project, we chose <kbd>Octree</kbd> 
+                as our acceleration structure and modify it to fit in our use cases. 
+            </p>
+            <h4>OcNode & Octree</h4>
+            <p>
+                An Octree is a data-structure where each node represents a bounding box volume in the 3D space and can have up to 8 children, which evenly subdivide the space into 
+                8 smaller boxes of identical shapes (see below illustration). Each node can represent some region in space, yet only the <code>leaf nodes</code> (without any children) 
+                actually store a list of <kbd>Vector3D</kbd> points located inside that region.
+            </p>
+            <p>
+                Once constructed, the Octree is able to answer spatial queries efficiently because, suppose we want to find all points within a certain distance to a query location (essentially search a spherical region), we 
+                can quickly index all nodes in Octree that potentially contain such points and ONLY iterate through points in those nodes. In contrast, we might need to iterate through every single point 
+                if they are unorganized. 
+            </p>
+            <br>
+            <div class="row">
+                <div class="col-md-6 offset-md-3" style="text-align: center;">
+                    <img src = "images/full_octree.png">
+                    <figcaption>https://geidav.files.wordpress.com/2014/08/full_octree.png</figcaption> 
+                </div>
+            </div>
+            <br>
+            <p>
+                Each OcNode represents a grid (box) region; however, many cases (e.g. the one above) require finding certain points within a spherical volume. Thus one important task is to calculate which 
+                nodes intersect with the spherical volume and such nodes need to be checked. What we did is to go from bottom-down (starting from the whole space), iteratively comparing the size of a node and the sphere at 
+                different layer, and stop when we cannot cover the sphere.
+            </p>
+
+            <h4>Implementation Details: Construction</h4>
+            <p>
+                In our setup, a OcNode contains its <kbd>origin</kbd>, which is the minimum of the box at all 3 axis, and its <kbd>shape</kbd>. These two vectors are enough to fully describe the node's region. 
+            </p>
+            <p>
+                For Octree and similar data-structures such as BST, the construction step is about putting assigning each point to the corresponding "leaf node" where it's pointer can be 
+                stored for the future. This is an iterative process and the key is to determine "going left or right" (for Octree, we do that decision for x, y, and z) at each layer. To accelerate this process, we choose to 
+                calculate <code>locational codes</code>, a binary representation of coordinates, for each point. Suppose we have a point <kbd>p</kbd> with the root node's size to be <kbd>s</kbd> and origin at <kbd>o</kbd>. Then 
+                the locational code is:
+                \[
+                    L = (\frac{p.x - o.x}{s.x}, \frac{p.y - o.y}{s.y}, \frac{p.z - o.z}{s.z})
+                \]
+                taken the floor of each term and represented in binary. An example of the actual locational code for a BST is shown below. The coordinate 7.1 is transformed into locational code 1011, and we surprisingly notice that 
+                each digit, taking value 0 or 1, actually contains the information of going left (0) or right (1) at the corresponding layer (first digit -- top layer). We can thus "extract out" these information with bit operation at each 
+                layer. The locational code in 3D space (BST is 1D) simply helps extract out these information in all axes. In this way we can construct our Octree very efficiently (24ms for 1 million points).
+            </p>
+            <br>
+            <div class="row">
+                <div class="col-md-6 offset-md-1" style="text-align: center;">
+                    <img src = "images/bst.png">
+                    <figcaption>http://www.ipol.im/pub/art/2014/81/article.pdf</figcaption> 
+                </div>
+            </div>
+            <br>
+
+            <h4>Implementation Details: Searching</h4>
+            <p>In the searching phase, we can use the aforementioned <code>locational code</code> again to better index the query position and relate it to certain nodes.</p>
+            <p>
+                We also briefly mentioned how do we determine the layer to start searching by comparing our nodes' size at each layer with the spherical region of interest. In reality, we make a specific <code>modification</code> to our Octree 
+                such that its height, width, and length doesn't have to be the same (in many octree implementation each node has to be cubic). This modification enables us to put a "tighter" bounding box around our object in the root object. Thus, whenver we 
+                try to compare the node's shape with a sphere, we will take the <kbd>min</kbd> of the x, y, z size of the node. 
+            </p>
+
+            <h4>Decisions and Improvements</h4>
+            <p>To sum up the above explanations, the following are some major decisions and improvements we make that are different from the original references</p>
+            <ul>
+                <li><p>
+                    <kbd>Locational Codes:</kbd> this enable faster construction and searching speed with bit operation (this is not an improvement since some references have this as well, but 
+                    we choose to spend more time doing this in exchange of better performance).
+                </p></li>
+                <li><p>
+                    <kbd>Different sizes in axes:</kbd> the x, y, z sizes of a node can be different so that each node is a general cuboid instead of perfect cube. 
+                </p></li>
+                <li><p>
+                    <kbd>Max depth and search depth:</kbd> it automatically calculate the maximum depth of the tree during construction, and calculate the layer to start searching when we have a query position and radius.
+                </p></li>
+            </ul>
+            <br>
+            <hr>
+            <h2>Technical approach: Geometry data structures</h2>
+            <p>
+                Since our implementation of “Point to Mesh” reconstruction requires huge amount of interactions and calculations with 3D geometries in different forms, we implemented several geometry class in C++ from scratch. Our data structures include Vertex, Edge, Sphere, and Triangle. 
+            </p>
+
+            <h4>Vertex:</h4>
+            <p>
+                The Vertex class contains two Vector3D parameters of point and normal, which stores its 3D location and vertex normal read from the .xyz file. It also has an adjacent_edges and an adjacent_triangles list to store all the edges and triangles around the Vertex. Thus, the Vertex class has an add_edge and add_triangle method to update these two lists in the construction of the Edge and Triangle class. The Vertex class also contains a type parameter to flag whether the Vertex is connected to the Edges and Triangles and whether the Vertex is included in the reconstructed mesh with a corresponding update_type method. Another important method of Vertex class is compatible check with both an Edge and two other Vertices; the method examines whether the area-weighted face normal of the Triangle composited of corresponding elements is in the same direction of each Vertex’s normal.
+            </p>
+
+            <h4>Edge:</h4>
+            <p>
+                The Edge class contains two Vertex elements, representing two endpoints of the edge. In the Edge construction, these Vertex elements would update their adjacent_edges list, and the Edge class contains the get_Vertex method for both Vertex elements. The Edge class also contains two Triangle elements to represent the adjacent two Triangles, which is updated through the add_triangle method. Similar to the Vertex class, the Edge class also contains the type parameter to flag whether the Edge is inside the reconstructed mesh, or on the boundary of the mesh, which is updated in the add_triangle method. One specific method for the Edge class called update_edge is to maintain the identical orientation of edges by comparing the face normal of adjacent Triangle and vertex normal of the vertex besides Edge’s endpoints.
+            </p>
+
+             <h4>Sphere:</h4>
+            <p>
+                The Sphere class is mainly used in the empty ball configuration, which contains a Vector3D parameter sphere center, and a double parameter radius.
+            </p>
+
+            <h4>Triangle:</h4>
+            <p>
+                The Triangle class is a class in higher hierarchy compared to Vertex and Edge. The data of faces in the BPA output come from the Triangle class. The Triangle class contains three Vertex elements and three Edge elements. In the Triangle construction, the type and all adjacent lists of Vertex and Edge elements get updated, and the Triangle construction takes care of whether the Edge is already created to prevent repetitive Edges between vertices.
+            </p>
+
+            <hr>
+
+            <h2>Technical approach: Ball-Pivoting Algorithm</h2>
+            <p>
+                The essense of BPA is to keep a list of "active edges". In the beginning, we will use the subroutine <kbd>findSeedTriangle()</kbd> to find a triangle mesh (with 3 vertices) to begin with, and add the triangle's three 
+                edges to the list; then we call <kbd>expandTriangulation()</kbd>, which will pop out the edge from the list and try to build more triangle meshes on its basis. This method will consume the edges in the list and 
+                once the list is empty, we start again by finding a seed triangle. This is the overall iterative process that builds up the mesh in BPA. 
+            </p>
+            <h4>FindSeedTriangle()</h4>
+            <p>
+                We know that in most cases, three arbitrary vertices can form a triangle plane in space. The task of <kbd>findSeedTriangle()</kbd> is thus to check if such a triangle is valid or not. There are three main conditions:
+            </p>
+            <ul>
+                <li><p>
+                    <code>#1: </code> all three vertices forming the triangle must have NOT been included in the existing mesh (triangles) yet.
+                </p></li>
+                <li><p>
+                    <code>#2: </code> we should be able to construct a circumsphere of radius <kbd>r</kbd> for these three vertices. This will automatically exclude vertices too far away from each other. Then, the circumsphere 
+                    constructed need to follow the <code>empty ball configuration</code>, which do not allow any point except for the vertices to be inside the sphere. Here, the radius <kbd>r</kbd> just introduced is a hyper-parameter 
+                    that need to be chosen manually. It can be interpreted as a "search distance" of our algorithm when considering compatible vertices, and its effect on the result will be explain in the later sections.
+                </p></li>
+                <li><p>
+                    <code>#3: </code> finally the vertex normal directions should be similar (determined by averaging their direction and dot product with the triangle surface normal). This is to ensure that the three vertices, in 
+                    their original mesh, are on the same "side".
+                </p></li>
+            </ul>
+            <p>
+                If the three vertices satisfy the above 3 conditions, we accept the triangle they form as a "seed triangle", adding this triangle to the mesh and its three edges to the active (front) edge list.
+            </p>
+
+            <h4>FindCandidate()</h4>
+            <p>
+                <kbd>findCandidate()</kbd> algorithm is another core composition of BPA, mainly called in <kbd>expandTriangulation()</kbd>. It takes a pointer of Edge and tries to return a valid candidate vertex that a Ball of radius <kbd>m_radius</kbd> could pivot on without touching other vertices or include any vertices inside. This function is the process of simulating the physical ball-pivoting process on vertices. If no valid candidate is found, the algorithm will return <kbd>NULL</kbd>.
+            </p>
+            <p>
+                The first step of <kbd>findCandidate()</kbd> is to deal with the already-exist triangle of Edge e. Because BPA always calls <kbd>findSeedTriangle()</kbd> before the <kbd>expandTriangulation()</kbd>, it is ensured, by construction, that the Edge e passed in <kbd>findCandidate()</kbd> would always have one adjacent triangle t1, to prevent BAD_ACCESS error. The function <kbd>findCandidate()</kbd> calculates the center of the sphere with radius m_radius on t1 and the midpoint m of Edge e. The important step is to calculate radius \(r’\) with formula \( r’ = |m – c| + \text{m_radius} \), and find sorted neighbors of radius \(r’\) within query point of midpoint m’s location, given the acceleration structure Octree and Octsearch.
+            </p>
+
+            <p>
+                While traversing through the Vertex v in sorted neighbors, <kbd>findCandidate()</kbd> ensures that v cannot belong to t1, v cannot be tagged as an inner Vertex in the already constructed mesh, and v must be compatible with Edge e. If so, we construct another Sphere with v and two endpoints of e. If there’s a valid Sphere with radius m_radius available for these three Vertices, and there’s no other Vertex from the sorted neighbor inside the Sphere, we would set candidate to v. The process can be visually illustrated as the following graph:
+            </p>
+
+            <br>
+            <div class="row">
+                <div class="col-md-12" style="text-align: center;">
+                    <img src = "images/candidate.png" width="600px">
+                        <figcaption align="middle">http://www.ipol.im/pub/art/2014/81/article.pdf
+                        </figcaption> 
+                </div>
+            </div>
+            <br>
+
+            <p>
+                As we want to set the candidate to be the first Vertex encountered by the rotating Sphere, we would use check the angle theta to measure the angle rotated by the Sphere. If Vertex v is eligible to be set as a candidate, we would like to check that the Sphere constructed using v has the smallest rotation angle. After traversing all of the Vertices in sorted neighbors, we return the valid candidate with the smallest rotation angle. If no valid candidate found, we would just return NULL.
+            </p>
+
+            <h4>expandTriangulation()</h4>
+            <p>
+                Our <kbd>expandTriangulation()</kbd> Method works with and updates the active front_edge list. As a self-iterative method, while the active edge list is not empty, we pop out the front Edge e from the active Edge list. After checking that e is not tagged as a border Edge or inner Edge, we call <kbd>findCandidate()</kbd> taking e as the parameter, and record the returned candidate Vertex v. Even though we checked the validity of v in the <kbd>findCandidate()</kbd>, we still want to double that that v is not tagged as inner Vertex or v is not compatible with e, and of course that v is not NULL. If v is not valid, we update Edge e’s type with border Edge and continue to the iteration.
+            </p>
+            <p>
+                With a valid candidate Vertex v, we check whether v is not connected to either endpoint of e, or the connecting Edge between v and e is not tagged as active. If so, we update e’s type as the border and continue. If v is still valid after these checks, we create a new triangle between e and v and add two edges connecting v and e’s endpoints to the active edge list if they are newly created.
+            </p>
+
+            <h4>postProcess()</h4>
+            <p>
+                Through <kbd>expandTriangulation()</kbd> process, there will be a special scenario to produces holes on the reconstructed mesh, as shown in the following graph:
+            </p>
+            <div class="row">
+                <div class="col-md-12" style="text-align: center;">
+                    <img src = "images/post.png" width="300px">
+                        <figcaption align="middle">http://www.ipol.im/pub/art/2014/81/article.pdf
+                        </figcaption> 
+                </div>
+            </div>
+            <br>
+            <p>
+                Thus, we also implemented a post-process to take consideration of this case. For the post-Process() method, it is also a self-iterative method but keeps track of the border edge list, which is also updated by the <kbd>expandTriangulation()</kbd>. The border edge list contains the edges that we previously thought as the border and cannot connect to other vertices to form triangles. We pop out the front of the border edge list and tag it as e. Then, we check the neighboring edges to find if there’re two neighboring edges of e connect to the same Vertex v. If such a v could be found, and the Edge e forms an oriented loop with v, then we add a new Triangle with endpoints of e and v and remove e from the border edge list. Otherwise, we just continue to iterate until the border edge list is empty.
+            </p>
+            <p>
+                Even though we dedicatedly implemented the function, we didn’t include it in the <kbd>reconstruct()</kbd> method because that the process doesn’t contribute too much to our overall reconstructed mesh based on our experiments and debug process.
+            </p>
+            <hr>
+            <h2>Problems encountered and lessons learnt</h2>
+            <h4>Problems:</h4>
+            <ul>
+                <li><p>
+                    The first problem we got is the subtle, unexpected phenomenon, the gaps on our reconstructed meshes show a regular pattern of being parallel to space axes. As you can see in the Armadillo, dragon, and bunny renderings. Furthermore, the density of the grid-like gaps changes with the chosen radius. We believe that the phenomenon is caused by our implementation of Octree, especially the level of Octree, since our Octree cannot support the access to adjacent branches(sub-space). Thus, the change tendency with BPA radius can be explained, since the level of Octree is calculated based on the given radius. There're also pretty supportive evidence about our hypothesis: the gaps look extremely like the cubes that Octree generated. Also, the sphere rendering, which doesn't use the acceleration structure, shows more random gaps without the grid pattern one.
+                </p></li>
+                <br>
+                <div class="row">
+                    <div class="col-md-6" style="text-align: center;">
+                        <img src = "images/blender/sphere.png" height="400px">
+                        <figcaption>no octree: messy, random gaps</figcaption> 
+                    </div>
+                    <div class="col-md-6" style="text-align: center;">
+                        <img src = "images/blender/monster_side.png" height="400px">
+                        <figcaption>with octree: parallel gaps</figcaption> 
+                    </div>
+                </div>
+                <br>
+                <li><p>
+                    Too large radius would cause a higher level of detail loss because the ball is too large and would miss several vertices. Too small radius causes a higher level of missing parts, because the ball cannot be rotated to the adjacent vertices. However, due to different levels of details for different regions of the mesh, the same radius could cause detail loss in some areas while producing gaps and holes for other parts. We proposed two solutions for this: the first one is to implement multiple radii. Multiple radii mean we run the reconstruction for several times with different radius given by the user. The second one is to use ML to tune the radius to find an optimal one since we found that the relationship between the radius and reconstruction results is pretty much like a convex function.
+                </p></li>
+            </ul>
+            <h4>Lessons learnt:</h4>
+            <ul>
+                <li><p>
+                    The first thing we learned is that it is extremely important to keep the code-base organized and clean since this is a pretty large project with a lot of cooperation and interactions. 
+                </p></li>
+                <li><p>
+                    Secondly, we never thought about how important a well-organized data structure could bring to the project. The acceleration structure saves us tremendous time in experiments and debugs processes. The geometry data structure also brings us great clarity and convenience in the debug process. There's a good visualization about why this is happening as follows:
+                </p></li>
+                <li><p>
+                    Also, the implementation of BPA requires a huge amount of geometry-related math, such as the empty ball configuration, which makes us more familiar with the geometry and mesh representation in computer graphics.
+                </p></li>
+            </ul>
+            <hr>
+            <h2>Results</h2>
+
+            <h4>Speedup by using OcTree</h4>
+            <table class="table">
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">With Octree (in s)</th>
+                    <th scope="col">Without Octree (in s)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">initialization</th>
+                    <td>0.025</td>
+                    <td>0.024</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">reconstruction</th>
+                    <td>11.655</td>
+                    <td>40.222</td>
+                  </tr>
+                </tbody>
+            </table>
+
+            <h4>Comparison of different BPA radius: </h4>
+            <br>
+            <div class="row">
+                <div class="col-md-12" style="text-align: center;">
+                    <img src = "images/blender/bunny_radius.png" width="400px">
+                        <figcaption align="middle">Bunny reconstruction with different BPA radius </figcaption> 
+                </div>
+            </div>
+            <br>
+            <p>We found is the trade-off between the degree of detail loss and missing parts, as you can see in the comparison of bunny .daes. As the radius increases, the holes and missing parts of the reconstruction decreases, while the degree of detail loss tends to increase. </p>
+
+            <h4>Comparison of origina .ply: </h4>
+            <br>
+            <div class="row">
+                <div class="col-md-12" style="text-align: center;">
+                    <img src = "images/blender/bunny_front.png" width="600px">
+                        <figcaption align="middle">Comparison, front angle</figcaption> 
+                </div>
+                <div class="col-md-12" style="text-align: center;">
+                    <img src = "images/blender/bunny_back.png" width="600px">
+                        <figcaption align="middle">Comparison, front angle</figcaption> 
+                </div>
+                <div class="col-md-12" style="text-align: center;">
+                    <img src = "images/blender/bunny_top.png" width="600px">
+                        <figcaption align="middle">Comparison, front angle</figcaption> 
+                </div>
+            </div>
+            <br>
+
+            <p>As we can see here, even though the comparison shows some degrees of detail loss, the overall similarity between the reconstructed meshes and the original meshes is still pretty high. </p>
+
+            <h4>Examples of other reconstructions: </h4>
+
+            <div class="row">
+                <div class="col-md-6" style="text-align: center;">
+                    <iframe width="600" height="350" src="https://www.youtube.com/embed/GIwfv9VCXsE" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="display:block;"></iframe>
+                    <figcaption align="middle">The reconstruction of Armadillo .ply, 172974 vertices</figcaption>
+                </div>
+                <div class="col-md-6" style="text-align: center;">
+                    <iframe width="600" height="350" src="https://www.youtube.com/embed/fMPrFUZ_sTI" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="display:block;"></iframe>
+                    <figcaption align="middle">The reconstruction of dragon .ply, 100250 vertices</figcaption>
+                </div>
+            </div>
+
+            <hr>
+            
+            <h2>Contribution: </h2>
+
+            <p>All team members contribute to the project files, presentation, testing, debugging, and experiments. The BPA algorithm is implemented equally by both of Star and Han.</p>
+
+            <p>There’re some parts they contribute individually: </p>
+
+            <p><code>Star Li:</code> Acceleration Structure, integration of BPA algorithm and other classes.</p>
+
+            <p><code>Han Cui:</code> Geometry Structure, File Input and Output, unintegrated BPA draft.</p>
+
+
+            <hr>
+            <h2>Resources</h2>
+            <h4>Ball-Pivoting Algorithm</h4>
+            <ul>
+                <li><p>
+                    The Ball-Pivoting Algorithm for Surface Reconstruction <a href="https://vgc.poly.edu/~csilva/papers/tvcg99.pdf">https://vgc.poly.edu/~csilva/papers/tvcg99.pdf</a>
+                </p></li>
+                <li><p>An Analysis and Implementation of a Parallel Ball Pivoting
+                    Algorithm <a href="http://www.ipol.im/pub/art/2014/81/article.pdf">http://www.ipol.im/pub/art/2014/81/article.pdf</a></p></li>
+            </ul>
+
+            <h4>Poisson Reconstruction</h4>
+            <ul>
+                <li><p>
+                    Poisson Surface Reconstruction <a href="http://hhoppe.com/poissonrecon.pdf">http://hhoppe.com/poissonrecon.pdf</a>
+                </p></li>
+            </ul>
+
+            <h4>Others</h4>
+            <ul>
+                <li><p>
+                    The Stanford 3D Scanning Repository <a href="http://graphics.stanford.edu/data/3Dscanrep/">http://graphics.stanford.edu/data/3Dscanrep/</a>
+                </p></li>
+                <li><p>
+                    File conversion <a href="http://w3.impa.br/~diego/software/rply/">http://w3.impa.br/~diego/software/rply/</a>
+                </p></li>
+                <li><p>
+                    Collada <a href="https://docs.blender.org/manual/en/latest/files/import_export/collada.html">https://docs.blender.org/manual/en/latest/files/import_export/collada.html</a>
+                </p></li>
+                <li><p>
+                    Dae conversion <a href="https://buildmedia.readthedocs.org/media/pdf/pycollada/latest/pycollada.pdf">https://buildmedia.readthedocs.org/media/pdf/pycollada/latest/pycollada.pdf</a>
+                </p></li>
+            </ul>
+            <br>
+            <hr>
+            <p class="text-center text-md-left">Made with ❤ with Bootstrap,
+                by Star Li and Han Cui
+            </p>
+            
+        </div>
+    </div>
+
+
+<style>
+    body {
+        font-family: 'Nunito', sans-serif;
+    }
+
+    .container {
+        max-width: 100%;
+    }
+
+    .navbar-splash {
+        background-color: #30404D;
+        position: relative;
+        margin-bottom: 20px;
+        padding: 10px 0;
+        width: 100%;
+        transition: 100ms;
+        z-index: 5;
+    }
+
+    .nav-item {
+        display: inline-block;
+        padding: 8px 18px;
+        background-color: transparent;
+    }
+
+    .nav-item:hover {
+        opacity: 0.8;
+    }
+
+    .item-text {
+        color: white;
+        margin: 0 3px;
+    }
+
+    .item-text:hover {
+        text-decoration: none;
+        color: white;
+    }
+
+    .course-title {
+        color: white;
+        font-size: larger;
+        margin: 0 3px;
+        padding-left: 10px;
+    }
+
+    .course-container {
+        width: 70%;
+        margin: 0 auto;
+        position: relative;
+        text-align: justify;
+    }
+
+    .icon-image {
+        margin: -40px auto;
+        display: block;
+    }
+
+    .img-center {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 50%;
+    }
+
+    h1 {
+        font-size: 30px;
+        line-height: 140%;
+        font-weight: bold;
+    }
+
+    h2 {
+        font-size: 27px;
+        line-height: 140%;
+    }
+
+    h3 {
+        font-size: 20px;
+        line-height: 140%;
+    }
+
+    h4 {
+        margin-top: 20px;
+        font-size: 19px;
+        font-weight: bold;
+        line-height: 140%;
+    }
+
+    p {
+        font-size: 18px;
+    }
+
+    code {
+        font-size: 18px;
+    }
+</style>
+</body></html>
